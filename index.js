@@ -31,8 +31,23 @@ async function connectToMongoDB() {
             const result = await booksCollection.insertOne(kooks);
             res.send(result)
         })
+        //
 
+        app.get('/api/books', async (req, res) =>{
+            const query = {
 
+            }
+            if (req.query.publisher){
+                query.publisher = req.query.publisher;
+            }
+            if (req.query.status){
+                query.status = req.query.status;
+            }
+
+            const cursor = booksCollection.find(query);
+            const result = await cursor.toArray();
+            res.send(result)
+        })
 
 
 
