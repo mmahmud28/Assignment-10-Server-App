@@ -33,6 +33,7 @@ async function connectToMongoDB() {
         })
         //
 
+        //librian books collection
         app.get('/api/books', async (req, res) =>{
             const query = {
 
@@ -48,6 +49,15 @@ async function connectToMongoDB() {
             const result = await cursor.toArray();
             res.send(result)
         })
+
+
+        //all Books collection
+        app.get('/api/allBooks', async (req, res) =>{
+            
+           const cursor = booksCollection.find({});
+            const result = await cursor.toArray();
+            res.send(result)
+        });
 
 
 
