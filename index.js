@@ -26,7 +26,6 @@ async function connectToMongoDB() {
 
         // Librayan Add Books Collection
         app.post('/api/addBooks', async (req, res)=>{
-
             const kooks = req.body;
             const result = await booksCollection.insertOne(kooks);
             res.send(result)
@@ -38,8 +37,8 @@ async function connectToMongoDB() {
             const query = {
 
             }
-            if (req.query.publisher){
-                query.publisher = req.query.publisher;
+            if (req.query.addedBy){
+                query.addedBy = req.query.addedBy;
             }
             if (req.query.status){
                 query.status = req.query.status;
@@ -52,14 +51,27 @@ async function connectToMongoDB() {
 
 
         //all Books collection
-        app.get('/api/allBooks', async (req, res) =>{
+        app.get('/api/allActiveBooks', async (req, res) =>{
+
+             const query = {
+
+            }
+            if (req.query.status){
+                query.status = req.query.status;
+            }
             
-           const cursor = booksCollection.find({});
+           const cursor = booksCollection.find(query);
             const result = await cursor.toArray();
             res.send(result)
         });
 
 
+        app.get('/api/books/:id', async (req, res) =>{
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)};
+            const result = await booksCollection.findOne(query);
+            res.send(result)
+        });
 
 
 
