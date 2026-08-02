@@ -90,11 +90,31 @@ async function connectToMongoDB() {
         })
 
         //book Item Delete
-        app.delete('/api/deleteBooks/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
-            const result = await booksCollection.deleteOne(query);
-            res.send(result)
+        app.delete("/api/deleteBooks/:id", async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                const result = await booksCollection.deleteOne({
+                    _id: new ObjectId(id),
+                });
+
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: "Book not found",
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: "Book deleted successfully",
+                });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: error.message,
+                });
+            }
         });
 
 
@@ -191,7 +211,7 @@ async function connectToMongoDB() {
         //all User List
         app.get('/api/userList', async (req, res) => {
             try {
-                
+
                 const result = await usersCollection.find().toArray();
 
                 res.send(result);
@@ -209,6 +229,66 @@ async function connectToMongoDB() {
                 const result = await booksCollection.find().toArray();
                 res.send(result);
             } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: error.message,
+                });
+            }
+        });
+
+        // ‍admin book status update 
+        app.patch("/api/books/adminStatus/:id", async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({
+                        success: false,
+                        message: "Invalid ObjectId",
+                    });
+                }
+
+                // বর্তমান বই খুঁজে বের করা
+                const book = await booksCollection.findOne({
+                    _id: new ObjectId(id),
+                });
+
+                if (!book) {
+                    return res.status(404).send({
+                        success: false,
+                        message: "Book not found",
+                    });
+                }
+
+                let newStatus = "active";
+
+                if (book.status === "active") {
+                    newStatus = "inactive";
+                } else if (
+                    book.status === "inactive" ||
+                    book.status === "Pending Approval"
+                ) {
+                    newStatus = "active";
+                }
+
+                const result = await booksCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $set: {
+                            status: newStatus,
+                        },
+                    }
+                );
+
+                res.status(200).send({
+                    success: true,
+                    message: "Status updated successfully",
+                    status: newStatus,
+                    modifiedCount: result.modifiedCount,
+                });
+            } catch (error) {
+                console.error(error);
+
                 res.status(500).send({
                     success: false,
                     message: error.message,
