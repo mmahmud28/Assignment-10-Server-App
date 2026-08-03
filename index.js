@@ -296,6 +296,18 @@ async function connectToMongoDB() {
             }
         });
 
+        //Books Order 
+        app.post ("/api/orderBooks", async (req, res)) => {
+            try {
+                const orderData = req.body;
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: error.message,
+                });
+            }   
+        }
+
 
 
 
