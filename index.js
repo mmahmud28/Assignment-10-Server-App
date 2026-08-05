@@ -23,6 +23,7 @@ async function connectToMongoDB() {
         const database = client.db("biblioDrop");
         const booksCollection = database.collection("books");
         const usersCollection = database.collection("user");
+        const orderBooksCollection = database.collection("orderBooks");
 
 
         // Librayan Add Books Collection
@@ -297,17 +298,49 @@ async function connectToMongoDB() {
         });
 
         //Books Order 
-        app.post ("/api/orderBooks", async (req, res)) => {
-            try {
-                const orderData = req.body;
-            } catch (error) {
-                res.status(500).send({
-                    success: false,
-                    message: error.message,
-                });
-            }   
-        }
+        app.post("/api/orderBooks", async (req, res) => {
+            const orderDetails = req.body;
 
+            orderDetails.paymentStatus = "pending";
+            orderDetails.borrowStatus = "pending_payment";
+            orderDetails.createdAt = new Date();
+
+            const result = await orderBooksCollection.insertOne(orderDetails);
+
+            res.send({
+                success: result.insertedId ? true : false,
+                insertedId: result.insertedId,
+            });
+        });
+
+        //Books Order Find One 
+        app.get("/api/orderBooks/:id", async (req, res) => {
+            const id = req.params.id;
+
+            const order = await orderBooksCollection.findOne({
+                _id: new ObjectId(id),
+            });
+
+            res.send(order);
+        });
+
+        //update order Data
+        app.patch("/api/orderBooks/:id", async (req, res) => {
+            const id = req.params.id;
+            const updatedData = req.body;
+
+            const result = await orderBooksCollection.updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: updatedData,
+                }
+            );
+
+            res.send({
+                success: result.modifiedCount > 0,
+                modifiedCount: result.modifiedCount,
+            });
+        });
 
 
 
