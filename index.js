@@ -24,6 +24,7 @@ async function connectToMongoDB() {
         const booksCollection = database.collection("books");
         const usersCollection = database.collection("user");
         const orderBooksCollection = database.collection("orderBooks");
+        const booksReviewCollection = database.collection("booksReview");
 
 
         // Librayan Add Books Collection
@@ -347,15 +348,27 @@ async function connectToMongoDB() {
 
         //Books Order Find One 
         app.get("/api/orderBooks/:id", async (req, res) => {
-            const id = req.params.id;
+            try {
+                const { id } = req.params;
 
-            const order = await orderBooksCollection.findOne({
-                _id: new ObjectId(id),
-            });
+                console.log("Order ID:", id);
 
-            res.send(order);
+                const order = await orderBooksCollection.findOne({
+                    _id: new ObjectId(id),
+                });
+
+                console.log(order);
+
+                res.json(order);
+            } catch (error) {
+                console.error("GET Order Error:", error);
+
+                res.status(500).json({
+                    success: false,
+                    message: error.message,
+                });
+            }
         });
-
         //update order Data
         app.patch("/api/orderBooks/:id", async (req, res) => {
             const id = req.params.id;
@@ -466,7 +479,87 @@ async function connectToMongoDB() {
         });
 
         // books order Status Change borrowStatus
-        app.patch()
+        app.patch("/api/orderBooksStatus/:id", async (req, res) => {
+            try {
+                const { id } = req.params;
+                const { borrowStatus } = req.body;
+
+                const result = await orderBooksCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $set: { borrowStatus },
+                    }
+                );
+
+                res.status(200).json({
+                    success: true,
+                    message: "Borrow status updated successfully.",
+                    result,
+                });
+            } catch (error) {
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error.",
+                });
+            }
+        });
+
+        //বুক রিভিউ
+        app.post("/api/booksReview", async (req, res) => {
+            try {
+                const reviewData = req.body;
+
+                const alreadyReviewed = await booksReviewCollection.findOne({
+                    orderId: reviewData.orderId,
+                });
+
+                if (alreadyReviewed) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "You have already submitted a review for this order.",
+                    });
+                }
+
+                const result = await booksReviewCollection.insertOne(reviewData);
+
+                res.status(201).json({
+                    success: true,
+                    message: "Review submitted successfully.",
+                    insertedId: result.insertedId,
+                });
+            } catch (error) {
+                console.error(error);
+
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error.",
+                });
+            }
+        });
+
+        // review Cheek
+        app.get("/api/booksReview/check/:orderId", async (req, res) => {
+            try {
+                const { orderId } = req.params;
+
+                const review = await booksReviewCollection.findOne({ orderId });
+
+                res.json({
+                    success: true,
+                    reviewed: !!review,
+                    review: review || null // 👈 এখানে review ডাটাটি পাঠাতে হবে
+                });
+            } catch (error) {
+                console.error("Error checking review:", error);
+
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error.",
+                });
+            }
+        });
+
+
 
 
         /// admin
