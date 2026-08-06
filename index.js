@@ -299,18 +299,50 @@ async function connectToMongoDB() {
 
         //Books Order 
         app.post("/api/orderBooks", async (req, res) => {
-            const orderDetails = req.body;
+            try {
+                const orderDetails = req.body;
+                const { bookId, userId } = req.body;
 
-            orderDetails.paymentStatus = "pending";
-            orderDetails.borrowStatus = "pending_payment";
-            orderDetails.createdAt = new Date();
+                // Required field validation
+                if (!bookId || !userId) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Book ID and User ID are required.",
+                    });
+                }
 
-            const result = await orderBooksCollection.insertOne(orderDetails);
+                // একই user একই book আগে order করেছে কিনা
+                const alreadyOrdered = await orderBooksCollection.findOne({
+                    bookId: bookId,
+                    userId: userId,
+                });
 
-            res.send({
-                success: result.insertedId ? true : false,
-                insertedId: result.insertedId,
-            });
+                if (alreadyOrdered) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "You have already requested this book.",
+                    });
+                }
+
+                orderDetails.paymentStatus = "pending";
+                orderDetails.borrowStatus = "pending_payment";
+                orderDetails.createdAt = new Date();
+
+                const result = await orderBooksCollection.insertOne(orderDetails);
+
+                res.status(201).json({
+                    success: true,
+                    insertedId: result.insertedId,
+                });
+
+            } catch (error) {
+                console.error("Order book error:", error);
+
+                res.status(500).json({
+                    success: false,
+                    message: "Failed to create borrow request.",
+                });
+            }
         });
 
         //Books Order Find One 
@@ -342,6 +374,99 @@ async function connectToMongoDB() {
             });
         });
 
+        //user alrady orde rChake
+        // Check user already ordered this book
+        app.get("/api/checkAlreadyOrdered", async (req, res) => {
+            try {
+                const { userId, bookId } = req.query;
+
+                console.log("Checking order:", {
+                    userId,
+                    bookId,
+                });
+
+                if (!userId || !bookId) {
+                    return res.status(400).json({
+                        success: false,
+                        alreadyOrdered: false,
+                        message: "userId and bookId are required.",
+                    });
+                }
+
+                const existingOrder = await orderBooksCollection.findOne({
+                    userId: userId,
+                    bookId: bookId,
+                });
+
+                if (existingOrder) {
+                    return res.status(200).json({
+                        success: true,
+                        alreadyOrdered: true,
+                        order: existingOrder,
+                    });
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    alreadyOrdered: false,
+                    order: null,
+                });
+
+            } catch (error) {
+                console.error(
+                    "checkAlreadyOrdered error:",
+                    error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    alreadyOrdered: false,
+                    message: "Internal server error.",
+                });
+            }
+        });
+
+        //user Order list
+        app.get("/api/userOrders/:userId", async (req, res) => {
+            try {
+                const { userId } = req.params;
+
+                const orders = await orderBooksCollection
+                    .find({ userId })
+                    .toArray();
+
+                res.send(orders);
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error",
+                });
+            }
+        });
+
+        //librarian Order list
+
+        app.get("/api/librarianOrders/:librarianId", async (req, res) => {
+            try {
+                const { librarianId } = req.params;
+
+                console.log("Param:", librarianId);
+
+                const orders = await orderBooksCollection
+                    .find({ libraryId: librarianId })
+                    .toArray();
+
+                console.log("Orders:", orders);
+
+                res.send(orders);
+            } catch (error) {
+                console.error(error);
+            }
+        });
+
+        // books order Status Change borrowStatus
+        app.patch()
 
 
         /// admin
