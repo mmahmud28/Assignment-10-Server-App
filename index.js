@@ -560,6 +560,374 @@ async function connectToMongoDB() {
         });
 
 
+        //User Summery
+        // ==========================================
+        // User Complete Activity Summary
+        // GET /api/userSummary/:userId
+        // ==========================================
+        app.get("/api/userSummary/:userId", async (req, res) => {
+            try {
+                const { userId } = req.params;
+
+                if (!userId) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "User ID is required.",
+                    });
+                }
+
+                // ------------------------------------------
+                // 1. Find User
+                // ------------------------------------------
+                const user = await usersCollection.findOne(
+                    {
+                        $or: [
+                            { _id: ObjectId.isValid(userId) ? new ObjectId(userId) : null },
+                            { id: userId },
+                        ],
+                    },
+                    {
+                        projection: {
+                            password: 0,
+                            confirmPassword: 0,
+                        },
+                    }
+                );
+
+                if (!user) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "User not found.",
+                    });
+                }
+
+                // ------------------------------------------
+                // 2. Get User Orders
+                // ------------------------------------------
+                const orders = await orderBooksCollection
+                    .find({ userId: userId })
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                // ------------------------------------------
+                // 3. Basic Order Statistics
+                // ------------------------------------------
+
+                const totalOrders = orders.length;
+
+                const pendingOrders = orders.filter((order) => {
+                    const status = String(order.borrowStatus || "").toLowerCase();
+
+                    return [
+                        "pending",
+                        "pending_payment",
+                        "pending approval",
+                        "processing",
+                        "approved",
+                    ].includes(status);
+                }).length;
+
+                const completedOrders = orders.filter((order) => {
+                    const status = String(order.borrowStatus || "").toLowerCase();
+
+                    return [
+                        "completed",
+                        "delivered",
+                        "returned",
+                        "finished",
+                    ].includes(status);
+                }).length;
+
+                const canceledOrders = orders.filter((order) => {
+                    const status = String(order.borrowStatus || "").toLowerCase();
+
+                    return [
+                        "cancelled",
+                        "canceled",
+                        "rejected",
+                    ].includes(status);
+                }).length;
+
+                // ------------------------------------------
+                // 4. Payment Statistics
+                // ------------------------------------------
+
+                const paidOrders = orders.filter(
+                    (order) =>
+                        String(order.paymentStatus || "").toLowerCase() === "paid"
+                );
+
+                const totalSpent = paidOrders.reduce((total, order) => {
+                    const amount = Number(order.booksPrice) || 0;
+
+                    return total + amount;
+                }, 0);
+
+                // ------------------------------------------
+                // 5. Monthly Spending
+                // ------------------------------------------
+
+                const monthlySpendingMap = {};
+
+                paidOrders.forEach((order) => {
+                    if (!order.createdAt) return;
+
+                    const date = new Date(order.createdAt);
+
+                    if (Number.isNaN(date.getTime())) return;
+
+                    const month = date.toLocaleString("en-US", {
+                        month: "short",
+                    });
+
+                    const year = date.getFullYear();
+
+                    const key = `${year}-${date.getMonth()}`;
+
+                    const amount = Number(order.booksPrice) || 0;
+
+                    if (!monthlySpendingMap[key]) {
+                        monthlySpendingMap[key] = {
+                            month,
+                            year,
+                            amount: 0,
+                        };
+                    }
+
+                    monthlySpendingMap[key].amount += amount;
+                });
+
+                const monthlySpending = Object.values(monthlySpendingMap)
+                    .sort((a, b) => {
+                        if (a.year !== b.year) {
+                            return a.year - b.year;
+                        }
+
+                        return (
+                            new Date(`${a.month} 1, ${a.year}`).getMonth() -
+                            new Date(`${b.month} 1, ${b.year}`).getMonth()
+                        );
+                    })
+                    .map((item) => ({
+                        month: item.month,
+                        year: item.year,
+                        amount: item.amount,
+                    }));
+
+                // ------------------------------------------
+                // 6. Monthly Books Ordered
+                // ------------------------------------------
+
+                const monthlyBooksMap = {};
+
+                orders.forEach((order) => {
+                    if (!order.createdAt) return;
+
+                    const date = new Date(order.createdAt);
+
+                    if (Number.isNaN(date.getTime())) return;
+
+                    const month = date.toLocaleString("en-US", {
+                        month: "short",
+                    });
+
+                    const year = date.getFullYear();
+
+                    const key = `${year}-${date.getMonth()}`;
+
+                    if (!monthlyBooksMap[key]) {
+                        monthlyBooksMap[key] = {
+                            month,
+                            year,
+                            books: 0,
+                        };
+                    }
+
+                    monthlyBooksMap[key].books += 1;
+                });
+
+                const monthlyBooks = Object.values(monthlyBooksMap)
+                    .sort((a, b) => {
+                        if (a.year !== b.year) {
+                            return a.year - b.year;
+                        }
+
+                        return (
+                            new Date(`${a.month} 1, ${a.year}`).getMonth() -
+                            new Date(`${b.month} 1, ${b.year}`).getMonth()
+                        );
+                    })
+                    .map((item) => ({
+                        month: item.month,
+                        year: item.year,
+                        books: item.books,
+                    }));
+
+                // ------------------------------------------
+                // 7. Get User Reviews
+                // ------------------------------------------
+                const reviews = await booksReviewCollection
+                    .find({
+                        $or: [
+                            { userId: userId },
+                            { reviewerId: userId },
+                        ],
+                    })
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                // ------------------------------------------
+                // 8. Delivery Statistics
+                // ------------------------------------------
+
+                const deliveredOrders = orders.filter((order) => {
+                    const status = String(order.borrowStatus || "").toLowerCase();
+
+                    return ["delivered", "completed"].includes(status);
+                }).length;
+
+                const totalForDelivery = orders.length;
+
+                const deliveryPercentage =
+                    totalForDelivery > 0
+                        ? Math.round(
+                            (deliveredOrders / totalForDelivery) * 100
+                        )
+                        : 0;
+
+                const pendingPercentage =
+                    totalForDelivery > 0
+                        ? Math.round(
+                            (pendingOrders / totalForDelivery) * 100
+                        )
+                        : 0;
+
+                const canceledPercentage =
+                    totalForDelivery > 0
+                        ? Math.round(
+                            (canceledOrders / totalForDelivery) * 100
+                        )
+                        : 0;
+
+                // ------------------------------------------
+                // 9. Book Statistics
+                // ------------------------------------------
+
+                const uniqueBookIds = [
+                    ...new Set(
+                        orders
+                            .map((order) => order.bookId)
+                            .filter(Boolean)
+                            .map(String)
+                    ),
+                ];
+
+                // ------------------------------------------
+                // 10. Get Ordered Books
+                // ------------------------------------------
+
+                let orderedBooks = [];
+
+                if (uniqueBookIds.length > 0) {
+                    const objectIds = uniqueBookIds
+                        .filter((id) => ObjectId.isValid(id))
+                        .map((id) => new ObjectId(id));
+
+                    orderedBooks = await booksCollection
+                        .find({
+                            $or: [
+                                {
+                                    _id: {
+                                        $in: objectIds,
+                                    },
+                                },
+                                {
+                                    _id: {
+                                        $in: uniqueBookIds,
+                                    },
+                                },
+                            ],
+                        })
+                        .toArray();
+                }
+
+                // ------------------------------------------
+                // 11. Final Response
+                // ------------------------------------------
+
+                return res.status(200).json({
+                    success: true,
+
+                    user: {
+                        id: user._id,
+                        name: user.name,
+                        email: user.email,
+                        phone: user.phone || null,
+                        photo: user.photo || user.image || null,
+                        role: user.role || "user",
+                    },
+
+                    stats: {
+                        totalOrders,
+                        pendingOrders,
+                        completedOrders,
+                        canceledOrders,
+
+                        totalSpent,
+
+                        totalReviews: reviews.length,
+
+                        totalBooks: uniqueBookIds.length,
+                    },
+
+                    books: {
+                        totalOrdered: totalOrders,
+                        uniqueBooks: uniqueBookIds.length,
+                        completed: completedOrders,
+                        pending: pendingOrders,
+                        canceled: canceledOrders,
+                    },
+
+                    spending: {
+                        total: totalSpent,
+                        paidOrders: paidOrders.length,
+                        monthly: monthlySpending,
+                    },
+
+                    readingActivity: {
+                        monthly: monthlyBooks,
+                    },
+
+                    delivery: {
+                        total: totalForDelivery,
+                        delivered: deliveredOrders,
+                        pending: pendingOrders,
+                        canceled: canceledOrders,
+
+                        percentage: {
+                            delivered: deliveryPercentage,
+                            pending: pendingPercentage,
+                            canceled: canceledPercentage,
+                        },
+                    },
+
+                    orders,
+
+                    books: orderedBooks,
+
+                    reviews,
+                });
+            } catch (error) {
+                console.error("User Summary Error:", error);
+
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to load user summary.",
+                    error: error.message,
+                });
+            }
+        });
+
 
 
         /// admin
