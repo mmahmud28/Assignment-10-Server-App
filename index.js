@@ -70,13 +70,125 @@ async function connectToMongoDB() {
 
 
         // user books detailes
-        app.get('/api/books/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
-            const result = await booksCollection.findOne(query);
-            res.send(result)
-        });
+        // User Book Details + Reviews
+        app.get("/api/books/:id", async (req, res) => {
+            try {
+                const id = req.params.id;
 
+                // ==========================================
+                // 1. Get Book
+                // ==========================================
+
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid book ID",
+                    });
+                }
+
+                const book = await booksCollection.findOne({
+                    _id: new ObjectId(id),
+                });
+
+                if (!book) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Book not found",
+                    });
+                }
+
+                // ==========================================
+                // 2. Get Reviews
+                // ==========================================
+
+                const reviews = await booksReviewCollection
+                    .find({
+                        bookId: id,
+                    })
+                    .sort({
+                        createdAt: -1,
+                    })
+                    .toArray();
+
+                // ==========================================
+                // 3. Add User Information
+                // ==========================================
+
+                const reviewsWithUser = await Promise.all(
+                    reviews.map(async (review) => {
+
+                        let user = null;
+
+                        // userId আছে কিনা
+                        if (review.userId) {
+
+                            // প্রথমে ObjectId হিসেবে খুঁজবে
+                            if (ObjectId.isValid(String(review.userId))) {
+                                user = await usersCollection.findOne({
+                                    _id: new ObjectId(
+                                        String(review.userId)
+                                    ),
+                                });
+                            }
+
+                            // ObjectId হিসেবে না পেলে string হিসেবে খুঁজবে
+                            if (!user) {
+                                user = await usersCollection.findOne({
+                                    _id: String(review.userId),
+                                });
+                            }
+
+                            // যদি তোমার user collection-এ "id" field থাকে
+                            if (!user) {
+                                user = await usersCollection.findOne({
+                                    id: String(review.userId),
+                                });
+                            }
+                        }
+
+                        return {
+                            ...review,
+
+                            // User থেকে image
+                            userImage:
+                                user?.image ||
+                                user?.photo ||
+                                "https://ui-avatars.com/api/?name=User",
+
+                            // User name
+                            userName:
+                                user?.name ||
+                                user?.fullName ||
+                                "Anonymous User",
+                        };
+                    })
+                );
+
+                // ==========================================
+                // 4. Final Response
+                // ==========================================
+
+                res.json({
+                    success: true,
+                    book,
+                    reviews: reviewsWithUser,
+                    reviewCount: reviewsWithUser.length,
+                });
+
+            } catch (error) {
+
+                console.error(
+                    "Error fetching book details:",
+                    error
+                );
+
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error",
+                    error: error.message,
+                });
+            }
+        });
 
 
         // LiBrian All Books Collectioon
