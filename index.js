@@ -1077,7 +1077,7 @@ client.connect(()=>{
         // Librarian Complete Activity Summary
         // GET /api/librarianSummary/:librarianId
         // ==========================================
-        app.get("/api/librarianSummary/:librarianId", async (req, res) => {
+        app.get("/api/librarianSummary/:librarianId", verifyToken, async (req, res) => {
             try {
                 const { librarianId } = req.params;
 
@@ -1669,7 +1669,7 @@ client.connect(()=>{
         // Admin Complete Activity Summary
         // GET /api/adminSummary
         // ==========================================
-        app.get("/api/adminSummary", async (req, res) => {
+        app.get("/api/adminSummary", verifyToken, async (req, res) => {
             try {
                 // ==========================================
                 // 1. Get All Users
