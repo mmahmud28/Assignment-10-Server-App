@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
+const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -16,9 +17,46 @@ app.get("/", (req, res) => {
 
 const client = new MongoClient(process.env.MONGO_DB_URI);
 
-async function connectToMongoDB() {
+// async function connectToMongoDB() {
+//     try {
+//         await client.connect();
+
+const JWKS = createRemoteJWKSet(new URL(process.env.JWKS_URI)
+);
+
+
+
+const verifyToken = async (req, res, next) => {
+    
+    const authHeader = req?.headers.authorization;
+    
+    if (!authHeader) {
+        return res.status(401).json({ message: "Authorization header is missing" });
+    }
+    
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+        return res.status(401).json({ message: "Token is missing" });
+    }
+
     try {
-        await client.connect();
+        const {payload} = await jwtVerify(token, JWKS);
+
+    console.log("Decoded JWT Payload:", payload);
+     next();
+    } catch (error) {
+        return res.status(403).json({ message: "Invalid token", error: error.message });
+    }
+    
+
+
+   
+};
+
+client.connect(()=>{
+    console.log("Connecting to MongoDb");
+    
+}).catch(console.dir);
 
         const database = client.db("biblioDrop");
         const booksCollection = database.collection("books");
@@ -71,7 +109,7 @@ async function connectToMongoDB() {
 
         // user books detailes
         // User Book Details + Reviews
-        app.get("/api/books/:id", async (req, res) => {
+        app.get("/api/books/:id", async (req, res) => {                                
             try {
                 const id = req.params.id;
 
@@ -192,7 +230,7 @@ async function connectToMongoDB() {
 
 
         // LiBrian All Books Collectioon
-        app.get('/api/librarianAllBooks', async (req, res) => {
+        app.get('/api/librarianAllBooks',  async (req, res) => {
             const query = {
             }
             if (req.query.addById) {
@@ -503,12 +541,7 @@ async function connectToMongoDB() {
         // Check user already ordered this book
         app.get("/api/checkAlreadyOrdered", async (req, res) => {
             try {
-                const { userId, bookId } = req.query;
-
-                console.log("Checking order:", {
-                    userId,
-                    bookId,
-                });
+                const { userId, bookId } = req.query;                
 
                 if (!userId || !bookId) {
                     return res.status(400).json({
@@ -2296,15 +2329,13 @@ async function connectToMongoDB() {
                 });
             }
         });
+        
+//     } catch (err) {
+//      //   /////console.error(err);
+//     }
+// }
 
-
-        console.log("✅ Connected to MongoDB");
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-connectToMongoDB();
+//connectToMongoDB();
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
