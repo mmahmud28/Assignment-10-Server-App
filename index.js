@@ -42,7 +42,7 @@ const verifyToken = async (req, res, next) => {
     try {
         const { payload } = await jwtVerify(token, JWKS);
 
-        console.log("Decoded JWT Payload:", payload);
+       
         next();
     } catch (error) {
         return res.status(403).json({ message: "Invalid token", error: error.message });
@@ -292,9 +292,7 @@ app.patch("/api/books/status/:id", async (req, res) => {
         const { id } = req.params;
         const { status } = req.body;
 
-        console.log("========== STATUS UPDATE ==========");
-        console.log("ID:", id);
-        console.log("STATUS:", status);
+        
 
         if (!ObjectId.isValid(id)) {
             return res.status(400).send({
@@ -312,7 +310,7 @@ app.patch("/api/books/status/:id", async (req, res) => {
             }
         );
 
-        console.log("MongoDB Result:", result);
+        
 
         if (result.matchedCount === 0) {
             return res.status(404).send({
@@ -501,13 +499,13 @@ app.get("/api/orderBooks/:id", async (req, res) => {
     try {
         const { id } = req.params;
 
-        console.log("Order ID:", id);
+       
 
         const order = await orderBooksCollection.findOne({
             _id: new ObjectId(id),
         });
 
-        console.log(order);
+       
 
         res.json(order);
     } catch (error) {
@@ -609,13 +607,13 @@ app.get("/api/librarianOrders/:librarianId", async (req, res) => {
     try {
         const { librarianId } = req.params;
 
-        console.log("Param:", librarianId);
+       
 
         const orders = await orderBooksCollection
             .find({ libraryId: librarianId })
             .toArray();
 
-        console.log("Orders:", orders);
+       
 
         res.send(orders);
     } catch (error) {
@@ -2527,6 +2525,11 @@ app.get("/api/public-stats", async (req, res) => {
         });
     }
 });
+
+
+app.get("/api/userDelete", async (req, res) => {
+    
+})
 
 //     } catch (err) {
 //      //   /////console.error(err);
